@@ -97,7 +97,6 @@ bazel_dep(name = "grpc", version = "1.56.3", repo_name = "com_github_grpc_grpc")
 
 go_sdk = use_extension("@io_bazel_rules_go//go:extensions.bzl", "go_sdk")
 go_sdk.download(
-    name = "go_sdk",
     version = "1.21.8",
 )
 use_repo(

@@ -17,6 +17,7 @@ def _proto_plugin_impl(ctx):
             tool_target = ctx.attr.tool,
             use_built_in_shell_environment = ctx.attr.use_built_in_shell_environment,
             protoc_plugin_name = ctx.attr.protoc_plugin_name,
+            direct_mode = ctx.attr.direct_mode,
             exclusions = ctx.attr.exclusions,
             mods = ctx.attr.mods,
             data = ctx.files.data,
@@ -67,5 +68,9 @@ proto_plugin = rule(
         "mods": attr.string_dict(
             doc = "content modifications to apply to the output files",
         ),
+        "direct_mode": attr.bool(
+            doc = "Whether the plugin add import roots and direct source files to protoc",
+            default = False,
+         ),        
     },
 )

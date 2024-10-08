@@ -240,6 +240,10 @@ def _proto_compile_impl(ctx):
         for k, v in plugin.mods.items():
             mods[k] = v
 
+        if plugin.direct_mode:
+            args.append("--proto_path={}".format(proto_info.proto_source_root))
+            inputs += protos
+
     ###
     ### Part 3: trailing args
     ###

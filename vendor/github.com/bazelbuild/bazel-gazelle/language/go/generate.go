@@ -36,6 +36,7 @@ func (gl *goLang) GenerateRules(args language.GenerateArgs) language.GenerateRes
 	// Extract information about proto files. We need this to exclude .pb.go
 	// files and generate go_proto_library rules.
 	c := args.Config
+	gc := getGoConfig(c)
 	pcMode := getProtoMode(c)
 
 	// This is a collection of proto_library rule names that have a corresponding
@@ -117,11 +118,27 @@ func (gl *goLang) GenerateRules(args language.GenerateArgs) language.GenerateRes
 	}
 
 	// Build a set of packages from files in this directory.
+	srcdir := args.Rel
+	if gc.goRepositoryMode {
+		// cgo opts such as '-L${SRCDIR}/libs' should become
+		// '-Lexternal/my_repo~/libs' in an external repo.
+		// We obtain the path from the repo root to support both cases of
+		// --experimental_sibling_repository_layout.
+		slashPath := filepath.ToSlash(c.RepoRoot)
+		segments := strings.Split(slashPath, "/")
+		repoName := segments[len(segments)-1]
+		previousSegment := segments[len(segments)-2]
+		if previousSegment == "external" {
+			srcdir = path.Join("external", repoName, srcdir)
+		} else {
+			srcdir = path.Join("..", repoName, srcdir)
+		}
+	}
 	goFileInfos := make([]fileInfo, len(goFiles))
 	var er *embedResolver
 	for i, name := range goFiles {
 		path := filepath.Join(args.Dir, name)
-		goFileInfos[i] = goFileInfo(path, args.Rel)
+		goFileInfos[i] = goFileInfo(path, srcdir)
 		if len(goFileInfos[i].embeds) > 0 && er == nil {
 			er = newEmbedResolver(args.Dir, args.Rel, c.ValidBuildFileNames, gl.goPkgRels, args.Subdirs, args.RegularFiles, args.GenFiles)
 		}
@@ -185,34 +202,84 @@ func (gl *goLang) GenerateRules(args language.GenerateArgs) language.GenerateRes
 	}
 	var res language.GenerateResult
 	var rules []*rule.Rule
+	var protoEmbeds []string
 	var protoEmbed string
-	for _, name := range protoRuleNames {
-		if _, ok := goProtoRules[":"+name]; ok {
+	if pcMode == proto.FileMode {
+		// get the list of protoRuleNames that are not already in goProtoRules
+		var newProtoRuleNames []string
+		for _, name := range protoRuleNames {
+			if _, ok := goProtoRules[":"+name]; !ok {
+				newProtoRuleNames = append(newProtoRuleNames, name)
+			}
+		}
+
+		// get the protoTargets for the new protoRuleNames
+		var importPathToProtoTargets = make(map[string][]protoTarget)
+		for _, name := range newProtoRuleNames {
+			ppkg := protoPackages[name]
+			importPath := goProtoImportPath(c, ppkg, args.Rel)
+			importPathToProtoTargets[importPath] = append(importPathToProtoTargets[importPath], protoTargetFromProtoPackage(name, ppkg))
+		}
+
+		// Deterministically sort by order of importpath.
+		importPaths := []string{}
+		for importPath, _ := range importPathToProtoTargets {
+			importPaths = append(importPaths, importPath)
+		}
+		sort.Strings(importPaths)
+
+		for _, importPath := range importPaths {
+			var rs []*rule.Rule
+			protoTargets := importPathToProtoTargets[importPath]
+			protoEmbed, rs = g.generateProto(pcMode, protoTargets, importPath)
+			if protoEmbed != "" {
+				// check if rs is non-empty and that the first rule is a go_proto_library with the same importPath
+				if len(rs) > 0 && rs[0].Kind() == "go_proto_library" && rs[0].AttrString("importpath") == pkg.importPath {
+					protoEmbeds = append(protoEmbeds, protoEmbed)
+				}
+			}
+			rules = append(rules, rs...)
+		}
+	} else {
+		for _, name := range protoRuleNames {
 			// if a go_proto_library rule exists for this proto_library rule
 			// already, skip creating another go_proto_library for it, assuming
 			// that a different gazelle extension is responsible for
 			// go_proto_library rule generation.
-			continue
+			if _, ok := goProtoRules[":"+name]; ok {
+				continue
+			}
+			ppkg := protoPackages[name]
+			var rs []*rule.Rule
+			if name == protoName {
+				var protoTargets []protoTarget
+				if pkg != nil {
+					protoTargets = append(protoTargets, pkg.proto)
+				}
+				protoEmbed, rs = g.generateProto(pcMode, []protoTarget{pkg.proto}, pkg.importPath)
+				if protoEmbed != "" {
+					// check if rs is non-empty and that the first rule is a go_proto_library with the same importPath
+					if len(rs) > 0 && rs[0].Kind() == "go_proto_library" && rs[0].AttrString("importpath") == pkg.importPath {
+						protoEmbeds = append(protoEmbeds, protoEmbed)
+					}
+				}
+			} else {
+				target := protoTargetFromProtoPackage(name, ppkg)
+				importPath := goProtoImportPath(c, ppkg, args.Rel)
+				_, rs = g.generateProto(pcMode, []protoTarget{target}, importPath)
+			}
+			rules = append(rules, rs...)
 		}
-		ppkg := protoPackages[name]
-		var rs []*rule.Rule
-		if name == protoName {
-			protoEmbed, rs = g.generateProto(pcMode, pkg.proto, pkg.importPath)
-		} else {
-			target := protoTargetFromProtoPackage(name, ppkg)
-			importPath := goProtoImportPath(c, ppkg, args.Rel)
-			_, rs = g.generateProto(pcMode, target, importPath)
-		}
-		rules = append(rules, rs...)
 	}
+
 	for _, name := range emptyProtoRuleNames {
 		goProtoName := strings.TrimSuffix(name, "_proto") + goProtoSuffix
 		res.Empty = append(res.Empty, rule.NewRule("go_proto_library", goProtoName))
 	}
-	if pkg != nil && pcMode == proto.PackageMode && pkg.firstGoFile() == "" {
+	if pkg != nil && (pcMode == proto.PackageMode || pcMode == proto.FileMode) && pkg.firstGoFile() == "" {
 		// In proto package mode, don't generate a go_library embedding a
 		// go_proto_library unless there are actually go files.
-		protoEmbed = ""
+		protoEmbeds = nil
 	}
 
 	// Complete the Go package and generate rules for that.
@@ -265,10 +332,10 @@ func (gl *goLang) GenerateRules(args language.GenerateArgs) language.GenerateRes
 		// Generate Go rules.
 		if protoName == "" {
 			// Empty proto rules for deletion.
-			_, rs := g.generateProto(pcMode, pkg.proto, pkg.importPath)
+			_, rs := g.generateProto(pcMode, []protoTarget{pkg.proto}, pkg.importPath)
 			rules = append(rules, rs...)
 		}
-		lib := g.generateLib(pkg, protoEmbed)
+		lib := g.generateLib(pkg, protoEmbeds)
 		var libName string
 		if !lib.IsEmpty(goKinds[lib.Kind()]) {
 			libName = lib.Name()
@@ -418,7 +485,7 @@ type generator struct {
 	shouldSetVisibility bool
 }
 
-func (g *generator) generateProto(mode proto.Mode, target protoTarget, importPath string) (string, []*rule.Rule) {
+func (g *generator) generateProto(mode proto.Mode, targets []protoTarget, importPath string) (string, []*rule.Rule) {
 	if !mode.ShouldGenerateRules() && mode != proto.LegacyMode {
 		// Don't create or delete proto rules in this mode. When proto mode is disabled,
 		// there may be hand-written rules or pre-generated Go files
@@ -427,9 +494,14 @@ func (g *generator) generateProto(mode proto.Mode, target protoTarget, importPat
 
 	gc := getGoConfig(g.c)
 	filegroupName := legacyProtoFilegroupName
-	protoName := target.name
+	var protoName string
+	if len(targets) == 1 {
+		protoName = targets[0].name
+	}
 	if protoName == "" {
-		importPath := InferImportPath(g.c, g.rel)
+		if importPath == "" {
+			importPath = InferImportPath(g.c, g.rel)
+		}
 		protoName = proto.RuleName(importPath)
 	}
 	goProtoName := strings.TrimSuffix(protoName, "_proto") + goProtoSuffix
@@ -437,17 +509,25 @@ func (g *generator) generateProto(mode proto.Mode, target protoTarget, importPat
 
 	if mode == proto.LegacyMode {
 		filegroup := rule.NewRule("filegroup", filegroupName)
-		if target.sources.isEmpty() {
+		if targets[0].sources.isEmpty() {
 			return "", []*rule.Rule{filegroup}
 		}
-		filegroup.SetAttr("srcs", target.sources.build())
+		filegroup.SetAttr("srcs", targets[0].sources.build())
 		if g.shouldSetVisibility {
 			filegroup.SetAttr("visibility", visibility)
 		}
 		return "", []*rule.Rule{filegroup}
 	}
 
-	if target.sources.isEmpty() {
+	var atLeastOneTargetHasSources bool
+	for _, target := range targets {
+		if !target.sources.isEmpty() {
+			atLeastOneTargetHasSources = true
+			break
+		}
+	}
+
+	if !atLeastOneTargetHasSources {
 		return "", []*rule.Rule{
 			rule.NewRule("filegroup", filegroupName),
 			rule.NewRule("go_proto_library", goProtoName),
@@ -455,9 +535,26 @@ func (g *generator) generateProto(mode proto.Mode, target protoTarget, importPat
 	}
 
 	goProtoLibrary := rule.NewRule("go_proto_library", goProtoName)
-	goProtoLibrary.SetAttr("proto", ":"+protoName)
+	if len(targets) == 1 {
+		goProtoLibrary.SetAttr("proto", ":"+protoName)
+	} else {
+		// generate protoNames with prefix ":"
+		protoNames := make([]string, len(targets))
+		for i := range targets {
+			protoNames[i] = ":" + targets[i].name
+		}
+		goProtoLibrary.SetAttr("protos", protoNames)
+	}
+
 	g.setImportAttrs(goProtoLibrary, importPath)
-	if target.hasServices {
+	var atLeastOneTargetHasServices bool
+	for _, target := range targets {
+		if target.hasServices {
+			atLeastOneTargetHasServices = true
+			break
+		}
+	}
+	if atLeastOneTargetHasServices {
 		goProtoLibrary.SetAttr("compilers", gc.goGrpcCompilers)
 	} else if gc.goProtoCompilersSet {
 		goProtoLibrary.SetAttr("compilers", gc.goProtoCompilers)
@@ -465,25 +562,56 @@ func (g *generator) generateProto(mode proto.Mode, target protoTarget, importPat
 	if g.shouldSetVisibility {
 		goProtoLibrary.SetAttr("visibility", visibility)
 	}
-	goProtoLibrary.SetPrivateAttr(config.GazelleImportsKey, target.imports.build())
+	if len(targets) == 1 {
+		goProtoLibrary.SetPrivateAttr(config.GazelleImportsKey, targets[0].imports.build())
+	} else {
+		protoSources := make(map[string]struct{})
+		for _, target := range targets {
+			for _, src := range target.sources.build().Generic {
+				// if src starts with the repo root plus a slash, trim it
+				// so that src is relative to the repo root, which is
+				// needed for the dep resolution to work correctly
+				if strings.HasPrefix(src, g.c.RepoRoot+"/") {
+					src = src[len(g.c.RepoRoot)+1:]
+				}
+				protoSources[src] = struct{}{}
+			}
+		}
+		var combinedImports platformStringsBuilder
+		for _, target := range targets {
+			builtImports := target.imports.build()
+			// handle Generics
+			for _, genericString := range builtImports.Generic {
+				// if the generic string is not in the set of generic src strings, add it
+				if _, ok := protoSources[genericString]; !ok {
+					combinedImports.addGenericString(genericString)
+				}
+			}
+		}
+
+		goProtoLibrary.SetPrivateAttr(config.GazelleImportsKey, combinedImports.build())
+	}
 	return goProtoName, []*rule.Rule{goProtoLibrary}
 }
 
-func (g *generator) generateLib(pkg *goPackage, embed string) *rule.Rule {
+func (g *generator) generateLib(pkg *goPackage, embeds []string) *rule.Rule {
 	gc := getGoConfig(g.c)
 	name := libNameByConvention(gc.goNamingConvention, pkg.importPath, pkg.name)
 	goLibrary := rule.NewRule("go_library", name)
-	if !pkg.library.sources.hasGo() && embed == "" {
+	if !pkg.library.sources.hasGo() && len(embeds) == 0 {
 		return goLibrary // empty
 	}
 	var visibility []string
 	if pkg.isCommand() {
-		// Libraries made for a go_binary should not be exposed to the public.
+		// By default, libraries made for a go_binary should not be exposed to the public.
 		visibility = []string{"//visibility:private"}
+		if len(getGoConfig(g.c).goVisibility) > 0 {
+			visibility = getGoConfig(g.c).goVisibility
+		}
 	} else {
 		visibility = g.commonVisibility(pkg.importPath)
 	}
-	g.setCommonAttrs(goLibrary, pkg.rel, visibility, pkg.library, embed)
+	g.setCommonAttrs(goLibrary, pkg.rel, visibility, pkg.library, embeds)
 	g.setImportAttrs(goLibrary, pkg.importPath)
 	return goLibrary
 }
@@ -512,7 +640,7 @@ func (g *generator) generateBin(pkg *goPackage, library string) *rule.Rule {
 		return goBinary // empty
 	}
 	visibility := g.commonVisibility(pkg.importPath)
-	g.setCommonAttrs(goBinary, pkg.rel, visibility, pkg.binary, library)
+	g.setCommonAttrs(goBinary, pkg.rel, visibility, pkg.binary, []string{library})
 	return goBinary
 }
 
@@ -548,11 +676,13 @@ func (g *generator) generateTests(pkg *goPackage, library string) []*rule.Rule {
 				continue
 			}
 		}
-		var embed string
+		var embeds []string
 		if test.hasInternalTest {
-			embed = library
+			if library != "" {
+				embeds = append(embeds, library)
+			}
 		}
-		g.setCommonAttrs(goTest, pkg.rel, nil, test, embed)
+		g.setCommonAttrs(goTest, pkg.rel, nil, test, embeds)
 		if pkg.hasTestdata {
 			goTest.SetAttr("data", rule.GlobValue{Patterns: []string{"testdata/**"}})
 		}
@@ -570,9 +700,9 @@ func (g *generator) maybePublishToolLib(lib *rule.Rule, pkg *goPackage) {
 }
 
 // maybeGenerateExtraLib generates extra equivalent library targets for
-// certain protobuf libraries. These "_gen" targets depend on Well Known Types
+// certain protobuf libraries. Historically, these "_gen" targets depend on Well Known Types
 // built with go_proto_library and are used together with go_proto_library.
-// The original targets are used when proto rule generation is disabled.
+// However, these are no longer needed and are kept as aliases to be backward-compatible
 func (g *generator) maybeGenerateExtraLib(lib *rule.Rule, pkg *goPackage) *rule.Rule {
 	gc := getGoConfig(g.c)
 	if gc.prefix != "github.com/golang/protobuf" || gc.prefixRel != "" {
@@ -582,17 +712,9 @@ func (g *generator) maybeGenerateExtraLib(lib *rule.Rule, pkg *goPackage) *rule.
 	var r *rule.Rule
 	switch pkg.importPath {
 	case "github.com/golang/protobuf/descriptor":
-		r = rule.NewRule("go_library", "go_default_library_gen")
-		r.SetAttr("srcs", pkg.library.sources.buildFlat())
-		r.SetAttr("importpath", pkg.importPath)
+		r = rule.NewRule("alias", "go_default_library_gen")
+		r.SetAttr("actual", ":go_default_library")
 		r.SetAttr("visibility", []string{"//visibility:public"})
-		r.SetAttr("deps", []string{
-			"//proto:go_default_library",
-			"@io_bazel_rules_go//proto/wkt:descriptor_go_proto",
-			"@org_golang_google_protobuf//reflect/protodesc:go_default_library",
-			"@org_golang_google_protobuf//reflect/protoreflect:go_default_library",
-			"@org_golang_google_protobuf//runtime/protoimpl:go_default_library",
-		})
 
 	case "github.com/golang/protobuf/jsonpb":
 		r = rule.NewRule("alias", "go_default_library_gen")
@@ -600,36 +722,20 @@ func (g *generator) maybeGenerateExtraLib(lib *rule.Rule, pkg *goPackage) *rule.
 		r.SetAttr("visibility", []string{"//visibility:public"})
 
 	case "github.com/golang/protobuf/protoc-gen-go/generator":
-		r = rule.NewRule("go_library", "go_default_library_gen")
-		r.SetAttr("srcs", pkg.library.sources.buildFlat())
-		r.SetAttr("importpath", pkg.importPath)
+		r = rule.NewRule("alias", "go_default_library_gen")
+		r.SetAttr("actual", ":go_default_library")
 		r.SetAttr("visibility", []string{"//visibility:public"})
-		r.SetAttr("deps", []string{
-			"//proto:go_default_library",
-			"//protoc-gen-go/generator/internal/remap:go_default_library",
-			"@io_bazel_rules_go//proto/wkt:compiler_plugin_go_proto",
-			"@io_bazel_rules_go//proto/wkt:descriptor_go_proto",
-		})
 
 	case "github.com/golang/protobuf/ptypes":
-		r = rule.NewRule("go_library", "go_default_library_gen")
-		r.SetAttr("srcs", pkg.library.sources.buildFlat())
-		r.SetAttr("importpath", pkg.importPath)
+		r = rule.NewRule("alias", "go_default_library_gen")
+		r.SetAttr("actual", ":go_default_library")
 		r.SetAttr("visibility", []string{"//visibility:public"})
-		r.SetAttr("deps", []string{
-			"//proto:go_default_library",
-			"@io_bazel_rules_go//proto/wkt:any_go_proto",
-			"@io_bazel_rules_go//proto/wkt:duration_go_proto",
-			"@io_bazel_rules_go//proto/wkt:timestamp_go_proto",
-			"@org_golang_google_protobuf//reflect/protoreflect:go_default_library",
-			"@org_golang_google_protobuf//reflect/protoregistry:go_default_library",
-		})
 	}
 
 	return r
 }
 
-func (g *generator) setCommonAttrs(r *rule.Rule, pkgRel string, visibility []string, target goTarget, embed string) {
+func (g *generator) setCommonAttrs(r *rule.Rule, pkgRel string, visibility []string, target goTarget, embeds []string) {
 	if !target.sources.isEmpty() {
 		r.SetAttr("srcs", target.sources.buildFlat())
 	}
@@ -654,8 +760,12 @@ func (g *generator) setCommonAttrs(r *rule.Rule, pkgRel string, visibility []str
 	if g.shouldSetVisibility && len(visibility) > 0 {
 		r.SetAttr("visibility", visibility)
 	}
-	if embed != "" {
-		r.SetAttr("embed", []string{":" + embed})
+	if len(embeds) > 0 {
+		colonEmbeds := make([]string, 0, len(embeds))
+		for _, embed := range embeds {
+			colonEmbeds = append(colonEmbeds, ":"+embed)
+		}
+		r.SetAttr("embed", colonEmbeds)
 	}
 	r.SetPrivateAttr(config.GazelleImportsKey, target.imports.build())
 }

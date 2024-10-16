@@ -5,3 +5,4 @@ docs/vendor
 node_modules
 vendor/**/BUILD.bazel
 MODULE.bazel.lock
+.idea

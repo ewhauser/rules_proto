@@ -18,7 +18,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,7 +30,7 @@ import (
 
 var goSdk = flag.String("go_sdk", "", "name of the go_sdk repository when invoked by Bazel")
 
-func SkipTestMain(m *testing.M) {
+func TestMain(m *testing.M) {
 	status := 1
 	defer func() {
 		os.Exit(status)
@@ -40,7 +39,7 @@ func SkipTestMain(m *testing.M) {
 	flag.Parse()
 
 	var err error
-	tmpDir, err := ioutil.TempDir(os.Getenv("TEST_TMPDIR"), "gazelle_test")
+	tmpDir, err := os.MkdirTemp(os.Getenv("TEST_TMPDIR"), "gazelle_test")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
@@ -50,12 +49,12 @@ func SkipTestMain(m *testing.M) {
 		// to any files that don't have it. Files and directories in the module cache
 		// are read-only, and on Windows, the read-only bit prevents deletion and
 		// prevents Bazel from cleaning up the source tree.
-		filepath.Walk(tmpDir, func(path string, info os.FileInfo, err error) error {
+		_ = filepath.Walk(tmpDir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
-			if mode := info.Mode(); mode&0200 == 0 {
-				err = os.Chmod(path, mode|0200)
+			if mode := info.Mode(); mode&0o200 == 0 {
+				err = os.Chmod(path, mode|0o200)
 			}
 			return err
 		})
@@ -105,19 +104,21 @@ func defaultArgs(dir string) []string {
 func TestCreateFile(t *testing.T) {
 	// Create a directory with a simple .go file.
 	tmpdir := os.Getenv("TEST_TMPDIR")
-	dir, err := ioutil.TempDir(tmpdir, "")
+	dir, err := os.MkdirTemp(tmpdir, "")
 	if err != nil {
-		t.Fatalf("ioutil.TempDir(%q, %q) failed with %v; want success", tmpdir, "", err)
+		t.Fatalf("os.MkdirTemp(%q, %q) failed with %v; want success", tmpdir, "", err)
 	}
 	defer os.RemoveAll(dir)
 
 	goFile := filepath.Join(dir, "main.go")
-	if err = ioutil.WriteFile(goFile, []byte("package main"), 0600); err != nil {
+	if err = os.WriteFile(goFile, []byte("package main"), 0o600); err != nil {
 		t.Fatalf("error writing file %q: %v", goFile, err)
 	}
 
 	// Check that Gazelle creates a new file named "BUILD.bazel".
-	run(dir, defaultArgs(dir))
+	if err = run(dir, defaultArgs(dir)); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
 
 	buildFile := filepath.Join(dir, "BUILD.bazel")
 	if _, err = os.Stat(buildFile); err != nil {
@@ -128,24 +129,27 @@ func TestCreateFile(t *testing.T) {
 func TestUpdateFile(t *testing.T) {
 	// Create a directory with a simple .go file and an empty BUILD file.
 	tmpdir := os.Getenv("TEST_TMPDIR")
-	dir, err := ioutil.TempDir(tmpdir, "")
+	dir, err := os.MkdirTemp(tmpdir, "")
 	if err != nil {
-		t.Fatalf("ioutil.TempDir(%q, %q) failed with %v; want success", tmpdir, "", err)
+		t.Fatalf("os.MkdirTemp(%q, %q) failed with %v; want success", tmpdir, "", err)
 	}
 	defer os.RemoveAll(dir)
 
 	goFile := filepath.Join(dir, "main.go")
-	if err = ioutil.WriteFile(goFile, []byte("package main"), 0600); err != nil {
+	if err = os.WriteFile(goFile, []byte("package main"), 0o600); err != nil {
 		t.Fatalf("error writing file %q: %v", goFile, err)
 	}
 
 	buildFile := filepath.Join(dir, "BUILD")
-	if err = ioutil.WriteFile(buildFile, nil, 0600); err != nil {
+	if err = os.WriteFile(buildFile, nil, 0o600); err != nil {
 		t.Fatalf("error writing file %q: %v", buildFile, err)
 	}
 
 	// Check that Gazelle updates the BUILD file in place.
-	run(dir, defaultArgs(dir))
+	if err = run(dir, defaultArgs(dir)); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
 	if st, err := os.Stat(buildFile); err != nil {
 		t.Errorf("could not stat BUILD: %v", err)
 	} else if st.Size() == 0 {
@@ -160,19 +164,19 @@ func TestUpdateFile(t *testing.T) {
 func TestNoChanges(t *testing.T) {
 	// Create a directory with a BUILD file that doesn't need any changes.
 	tmpdir := os.Getenv("TEST_TMPDIR")
-	dir, err := ioutil.TempDir(tmpdir, "")
+	dir, err := os.MkdirTemp(tmpdir, "")
 	if err != nil {
-		t.Fatalf("ioutil.TempDir(%q, %q) failed with %v; want success", tmpdir, "", err)
+		t.Fatalf("os.MkdirTemp(%q, %q) failed with %v; want success", tmpdir, "", err)
 	}
 	defer os.RemoveAll(dir)
 
 	goFile := filepath.Join(dir, "main.go")
-	if err = ioutil.WriteFile(goFile, []byte("package main"), 0600); err != nil {
+	if err = os.WriteFile(goFile, []byte("package main\n\nfunc main() {}"), 0o600); err != nil {
 		t.Fatalf("error writing file %q: %v", goFile, err)
 	}
 
 	buildFile := filepath.Join(dir, "BUILD")
-	if err = ioutil.WriteFile(buildFile, []byte(`load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+	if err = os.WriteFile(buildFile, []byte(`load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_library(
     name = "go_default_library",
@@ -186,7 +190,7 @@ go_binary(
     embed = [":go_default_library"],
     visibility = ["//visibility:public"],
 )
-`), 0600); err != nil {
+`), 0o600); err != nil {
 		t.Fatalf("error writing file %q: %v", buildFile, err)
 	}
 	st, err := os.Stat(buildFile)
@@ -196,7 +200,10 @@ go_binary(
 	modTime := st.ModTime()
 
 	// Ensure that Gazelle does not write to the BUILD file.
-	run(dir, defaultArgs(dir))
+	if err = run(dir, defaultArgs(dir)); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
 	if st, err := os.Stat(buildFile); err != nil {
 		t.Errorf("could not stat BUILD: %v", err)
 	} else if !modTime.Equal(st.ModTime()) {
@@ -228,7 +235,8 @@ package main
 
 func main() {}
 `,
-		}, {
+		},
+		{
 			Path:    "out/BUILD",
 			Content: `this should get replaced`,
 		},
@@ -388,12 +396,261 @@ go_library(
 	defer cleanup()
 
 	// Check that Gazelle does not update the BUILD file, due to lang filter.
-	run(dir, []string{
+	if err := run(dir, []string{
 		"-repo_root", dir,
 		"-go_prefix", "example.com/repo",
 		"-lang=proto",
 		dir,
-	})
+	}); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
 
 	testtools.CheckFiles(t, dir, fixture)
+}
+
+func TestFix_MapKind_Argument(t *testing.T) {
+	for name, tc := range map[string]struct {
+		before []testtools.FileSpec
+		after  []testtools.FileSpec
+	}{
+		"same-name": {
+			before: []testtools.FileSpec{
+				{
+					Path: "BUILD.bazel",
+					Content: `
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+# gazelle:map_kind go_binary go_binary //my:custom.bzl
+
+maybe(
+    go_binary,
+    name = "nofix",
+    library = ":go_default_library",
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = ["some.go"],
+    importpath = "example.com/repo",
+    visibility = ["//visibility:public"],
+)`,
+				},
+				{
+					Path:    "some.go",
+					Content: `package some`,
+				},
+			},
+			after: []testtools.FileSpec{
+				{
+					Path: "BUILD.bazel",
+					Content: `
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("//my:custom.bzl", "go_binary")
+
+# gazelle:map_kind go_binary go_binary //my:custom.bzl
+
+maybe(
+    go_binary,
+    name = "nofix",
+    library = ":go_default_library",
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = ["some.go"],
+    importpath = "example.com/repo",
+    visibility = ["//visibility:public"],
+)`,
+				},
+			},
+		},
+		"different-name": {
+			before: []testtools.FileSpec{
+				{
+					Path: "BUILD.bazel",
+					Content: `
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+# gazelle:map_kind go_binary custom_go_binary //my:custom.bzl
+
+maybe(
+    go_binary,
+    name = "nofix",
+    library = ":go_default_library",
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = ["some.go"],
+    importpath = "example.com/repo",
+    visibility = ["//visibility:public"],
+)`,
+				},
+				{
+					Path:    "some.go",
+					Content: `package some`,
+				},
+			},
+			after: []testtools.FileSpec{
+				{
+					Path: "BUILD.bazel",
+					Content: `
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("//my:custom.bzl", "custom_go_binary")
+
+# gazelle:map_kind go_binary custom_go_binary //my:custom.bzl
+
+maybe(
+    custom_go_binary,
+    name = "nofix",
+    library = ":go_default_library",
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = ["some.go"],
+    importpath = "example.com/repo",
+    visibility = ["//visibility:public"],
+)`,
+				},
+			},
+		},
+		"non-loaded-symbol": {
+			before: []testtools.FileSpec{
+				{
+					Path: "BUILD.bazel",
+					Content: `
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+custom_go_library = go_library
+
+# This will be ignored because it's not a directly loaded symbol when used:
+# gazelle:map_kind custom_go_library custom_go_library //my:custom.bzl
+
+maybe(
+    custom_go_library,
+    name = "nofix",
+    library = ":go_default_library",
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = ["some.go"],
+    importpath = "example.com/repo",
+    visibility = ["//visibility:public"],
+)
+`,
+				},
+				{
+					Path:    "some.go",
+					Content: `package some`,
+				},
+			},
+			after: []testtools.FileSpec{
+				{
+					Path: "BUILD.bazel",
+					Content: `
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+custom_go_library = go_library
+
+# This will be ignored because it's not a directly loaded symbol when used:
+# gazelle:map_kind custom_go_library custom_go_library //my:custom.bzl
+
+maybe(
+    custom_go_library,
+    name = "nofix",
+    library = ":go_default_library",
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = ["some.go"],
+    importpath = "example.com/repo",
+    visibility = ["//visibility:public"],
+)
+`,
+				},
+			},
+		},
+		"not-arg-0": {
+			before: []testtools.FileSpec{
+				{
+					Path: "BUILD.bazel",
+					Content: `
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@other_rules//:def.bzl", "something_custom")
+
+# gazelle:map_kind something_custom something_custom //my:custom.bzl
+
+maybe(
+    go_library,
+    something_custom,
+    name = "nofix",
+    library = ":go_default_library",
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = ["some.go"],
+    importpath = "example.com/repo",
+    visibility = ["//visibility:public"],
+)
+`,
+				},
+				{
+					Path:    "some.go",
+					Content: `package some`,
+				},
+			},
+			after: []testtools.FileSpec{
+				{
+					Path: "BUILD.bazel",
+					Content: `
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@other_rules//:def.bzl", "something_custom")
+
+# gazelle:map_kind something_custom something_custom //my:custom.bzl
+
+maybe(
+    go_library,
+    something_custom,
+    name = "nofix",
+    library = ":go_default_library",
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = ["some.go"],
+    importpath = "example.com/repo",
+    visibility = ["//visibility:public"],
+)
+`,
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir, cleanup := testtools.CreateFiles(t, tc.before)
+			defer cleanup()
+
+			if err := run(dir, []string{
+				"-repo_root", dir,
+				"-go_prefix", "example.com/repo",
+				dir,
+			}); err != nil {
+				t.Fatalf("run failed: %v", err)
+			}
+
+			testtools.CheckFiles(t, dir, tc.after)
+		})
+	}
 }

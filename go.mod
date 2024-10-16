@@ -1,11 +1,13 @@
 module github.com/stackb/rules_proto
 
-go 1.18
+go 1.21.1
+
+toolchain go1.23.2
 
 require (
-	github.com/bazelbuild/bazel-gazelle v0.35.0
-	github.com/bazelbuild/buildtools v0.0.0-20231115204819-d4c9dccdfbb1
-	github.com/bazelbuild/rules_go v0.44.1
+	github.com/bazelbuild/bazel-gazelle v0.39.1
+	github.com/bazelbuild/buildtools v0.0.0-20240827154017-dd10159baa91
+	github.com/bazelbuild/rules_go v0.50.1
 	github.com/bmatcuk/doublestar v1.3.4
 	github.com/emicklei/proto v1.13.0
 	github.com/google/go-cmp v0.6.0
@@ -18,8 +20,8 @@ require (
 require (
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	golang.org/x/mod v0.14.0 // indirect
-	golang.org/x/sync v0.5.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/mod v0.20.0 // indirect
+	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/sys v0.25.0 // indirect
 	golang.org/x/tools/go/vcs v0.1.0-deprecated // indirect
 )

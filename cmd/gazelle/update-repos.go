@@ -31,7 +31,6 @@ import (
 	"github.com/bazelbuild/bazel-gazelle/merger"
 	"github.com/bazelbuild/bazel-gazelle/repo"
 	"github.com/bazelbuild/bazel-gazelle/rule"
-	"github.com/stackb/rules_proto/cmd/gazelle/internal/module"
 	"github.com/stackb/rules_proto/cmd/gazelle/internal/wspace"
 )
 
@@ -50,6 +49,8 @@ const updateReposName = "_update-repos"
 func getUpdateReposConfig(c *config.Config) *updateReposConfig {
 	return c.Exts[updateReposName].(*updateReposConfig)
 }
+
+var _ config.Configurer = (*updateReposConfigurer)(nil)
 
 type updateReposConfigurer struct{}
 
@@ -108,7 +109,11 @@ func (*updateReposConfigurer) CheckFlags(fs *flag.FlagSet, c *config.Config) err
 	workspacePath := wspace.FindWORKSPACEFile(c.RepoRoot)
 	uc.workspace, err = rule.LoadWorkspaceFile(workspacePath, "")
 	if err != nil {
-		return fmt.Errorf("loading WORKSPACE file: %v", err)
+		if c.Bzlmod {
+			return nil
+		} else {
+			return fmt.Errorf("loading WORKSPACE file: %v", err)
+		}
 	}
 	c.Repos, uc.repoFileMap, err = repo.ListRepositories(uc.workspace)
 	if err != nil {
@@ -137,16 +142,11 @@ func updateRepos(wd string, args []string) (err error) {
 	}
 	uc := getUpdateReposConfig(c)
 
-	moduleToApparentName, err := module.ExtractModuleToApparentNameMapping(c.RepoRoot)
-	if err != nil {
-		return err
-	}
-
 	kinds := make(map[string]rule.KindInfo)
 	loads := []rule.LoadInfo{}
 	for _, lang := range languages {
 		if moduleAwareLang, ok := lang.(language.ModuleAwareLanguage); ok {
-			loads = append(loads, moduleAwareLang.ApparentLoads(moduleToApparentName)...)
+			loads = append(loads, moduleAwareLang.ApparentLoads(c.ModuleToApparentName)...)
 		} else {
 			loads = append(loads, lang.Loads()...)
 		}

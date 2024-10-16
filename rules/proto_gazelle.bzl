@@ -20,6 +20,12 @@ load(
     "shell",
 )
 
+load(
+    "@bazel_gazelle_is_bazel_module//:defs.bzl",
+    "GAZELLE_IS_BAZEL_MODULE",
+)
+
+
 DEFAULT_LANGUAGES = [
     "@bazel_gazelle//language/proto:go_default_library",
     "@bazel_gazelle//language/go:go_default_library",
@@ -56,6 +62,8 @@ def _gazelle_runner_impl(ctx):
         args.extend(["-go_prefix", ctx.attr.prefix])
     if ctx.attr.build_tags:
         args.extend(["-build_tags", ",".join(ctx.attr.build_tags)])
+    if GAZELLE_IS_BAZEL_MODULE:
+        args.append("-bzlmod")
     if ctx.attr.cfgs:
         cfgs = ",".join([f.short_path for f in ctx.files.cfgs])
         args.extend(["-proto_configs", cfgs])
@@ -137,7 +145,7 @@ _gazelle_runner = rule(
         "cfgs": attr.label_list(allow_files = True),
         "env": attr.string_dict(),
         "_repo_config": attr.label(
-            default = None,
+            default = "@bazel_gazelle_go_repository_config//:WORKSPACE" if GAZELLE_IS_BAZEL_MODULE else None,
             allow_single_file = True,
         ),
         "_template": attr.label(

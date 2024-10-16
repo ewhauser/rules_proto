@@ -37,6 +37,23 @@ type GlobValue struct {
 	Excludes []string
 }
 
+func (g GlobValue) BzlExpr() bzl.Expr {
+	patternsValue := ExprFromValue(g.Patterns)
+	globArgs := []bzl.Expr{patternsValue}
+	if len(g.Excludes) > 0 {
+		excludesValue := ExprFromValue(g.Excludes)
+		globArgs = append(globArgs, &bzl.AssignExpr{
+			LHS: &bzl.LiteralExpr{Token: "exclude"},
+			Op:  "=",
+			RHS: excludesValue,
+		})
+	}
+	return &bzl.CallExpr{
+		X:    &bzl.LiteralExpr{Token: "glob"},
+		List: globArgs,
+	}
+}
+
 // BzlExprValue is implemented by types that have custom translations
 // to Starlark values.
 type BzlExprValue interface {
@@ -124,12 +141,13 @@ func (s SelectStringListValue) BzlExpr() bzl.Expr {
 // ExprFromValue converts a value into an expression that can be written into
 // a Bazel build file. The following types of values can be converted:
 //
-//   * bools, integers, floats, strings.
-//   * slices, arrays (converted to lists).
-//   * maps (converted to select expressions; keys must be rules in
+//   - bools, integers, floats, strings.
+//   - labels (converted to strings).
+//   - slices, arrays (converted to lists).
+//   - maps (converted to select expressions; keys must be rules in
 //     @io_bazel_rules_go//go/platform).
-//   * GlobValue (converted to glob expressions).
-//   * PlatformStrings (converted to a concatenation of a list and selects).
+//   - GlobValue (converted to glob expressions).
+//   - PlatformStrings (converted to a concatenation of a list and selects).
 //
 // Converting unsupported types will cause a panic.
 func ExprFromValue(val interface{}) bzl.Expr {
@@ -180,25 +198,6 @@ func ExprFromValue(val interface{}) bzl.Expr {
 			args[i] = &bzl.KeyValueExpr{Key: k, Value: v}
 		}
 		return &bzl.DictExpr{List: args, ForceMultiLine: true}
-
-	case reflect.Struct:
-		switch val := val.(type) {
-		case GlobValue:
-			patternsValue := ExprFromValue(val.Patterns)
-			globArgs := []bzl.Expr{patternsValue}
-			if len(val.Excludes) > 0 {
-				excludesValue := ExprFromValue(val.Excludes)
-				globArgs = append(globArgs, &bzl.AssignExpr{
-					LHS: &bzl.LiteralExpr{Token: "exclude"},
-					Op:  "=",
-					RHS: excludesValue,
-				})
-			}
-			return &bzl.CallExpr{
-				X:    &bzl.LiteralExpr{Token: "glob"},
-				List: globArgs,
-			}
-		}
 	}
 
 	log.Panicf("type not supported: %T", val)
@@ -217,7 +216,7 @@ func mapKeyString(k reflect.Value) string {
 
 type byString []reflect.Value
 
-var _ sort.Interface = byString{}
+var _ sort.Interface = (*byString)(nil)
 
 func (s byString) Len() int {
 	return len(s)

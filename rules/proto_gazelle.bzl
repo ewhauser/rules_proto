@@ -16,15 +16,13 @@
 """
 
 load(
-    "@bazel_skylib//lib:shell.bzl",
-    "shell",
-)
-
-load(
     "@bazel_gazelle_is_bazel_module//:defs.bzl",
     "GAZELLE_IS_BAZEL_MODULE",
 )
-
+load(
+    "@bazel_skylib//lib:shell.bzl",
+    "shell",
+)
 
 DEFAULT_LANGUAGES = [
     "@bazel_gazelle//language/proto:go_default_library",
@@ -80,7 +78,7 @@ def _gazelle_runner_impl(ctx):
     env = "\n".join(["export %s=%s" % (x, shell.quote(y)) for (x, y) in ctx.attr.env.items()])
 
     out_file = ctx.actions.declare_file(ctx.label.name + ".bash")
-    go_tool = ctx.toolchains["@io_bazel_rules_go//go:toolchain"].sdk.go
+    go_tool = ctx.toolchains["@rules_go//go:toolchain"].sdk.go
     repo_config = ctx.file._repo_config
     substitutions = {
         "@@ARGS@@": shell.array_literal(args),
@@ -154,7 +152,7 @@ _gazelle_runner = rule(
         ),
     },
     executable = True,
-    toolchains = ["@io_bazel_rules_go//go:toolchain"],
+    toolchains = ["@rules_go//go:toolchain"],
 )
 
 def proto_gazelle(name, **kwargs):

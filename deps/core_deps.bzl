@@ -12,7 +12,7 @@ def core_deps():
     """core dependency macro
     """
     bazel_skylib()  # via bazel_gazelle
-    io_bazel_rules_go()  # via bazel_gazelle
+    rules_go()  # via bazel_gazelle
     bazel_gazelle()  # via <TOP>
     rules_proto()  # via <TOP>
 
@@ -27,10 +27,10 @@ def bazel_skylib():
         ],
     )
 
-def io_bazel_rules_go():
+def rules_go():
     _maybe(
         http_archive,
-        name = "io_bazel_rules_go",
+        name = "rules_go",
         sha256 = "aac6e182a9fffa2944fdf8abdca513823e21030bbb854ce74d8abfbccd636459",
         strip_prefix = "rules_go-0.45.1",
         urls = [

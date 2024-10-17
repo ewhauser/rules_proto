@@ -648,11 +648,11 @@ func fixRepoFiles(c *config.Config, loads []rule.LoadInfo) error {
 }
 
 // removeLegacyGoRepository removes loads of go_repository from
-// @io_bazel_rules_go. FixLoads should be called after this; it will load from
+// @rules_go. FixLoads should be called after this; it will load from
 // @bazel_gazelle.
 func removeLegacyGoRepository(f *rule.File) {
 	for _, l := range f.Loads {
-		if l.Name() == "@io_bazel_rules_go//go:def.bzl" {
+		if l.Name() == "@rules_go//go:def.bzl" {
 			l.Remove("go_repository")
 			if l.IsEmpty() {
 				l.Delete()

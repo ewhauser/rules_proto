@@ -51,7 +51,7 @@ func TestDiffExisting(t *testing.T) {
 --- BUILD.bazel	1970-01-01 00:00:00.000000001 +0000
 +++ BUILD.bazel	1970-01-01 00:00:00.000000001 +0000
 @@ -1,2 +1,10 @@
-+load("@io_bazel_rules_go//go:def.bzl", "go_library")
++load("@rules_go//go:def.bzl", "go_library")
  
  # gazelle:prefix example.com/hello
 +
@@ -88,7 +88,7 @@ func TestDiffNew(t *testing.T) {
 --- /dev/null	1970-01-01 00:00:00.000000001 +0000
 +++ BUILD.bazel	1970-01-01 00:00:00.000000001 +0000
 @@ -0,0 +1,8 @@
-+load("@io_bazel_rules_go//go:def.bzl", "go_library")
++load("@rules_go//go:def.bzl", "go_library")
 +
 +go_library(
 +    name = "hello",
@@ -159,7 +159,7 @@ func TestDiffReadWriteDir(t *testing.T) {
 --- %s	1970-01-01 00:00:00.000000001 +0000
 +++ %s	1970-01-01 00:00:00.000000001 +0000
 @@ -1 +1,10 @@
-+load("@io_bazel_rules_go//go:def.bzl", "go_library")
++load("@rules_go//go:def.bzl", "go_library")
 +
  # gazelle:prefix example.com/hello
 +

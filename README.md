@@ -98,7 +98,7 @@ load("@build_stack_rules_proto//deps:core_deps.bzl", "core_deps")
 core_deps()
 ```
 
-> This brings in `@io_bazel_rules_go`, `@bazel_gazelle`, and `@rules_proto` if
+> This brings in `@rules_go`, `@bazel_gazelle`, and `@rules_proto` if
 > you don't already have them.
 
 > The gazelle extension and associated golang dependencies are optional; you can
@@ -109,7 +109,7 @@ core_deps()
 
 ```python
 load(
-    "@io_bazel_rules_go//go:deps.bzl",
+    "@rules_go//go:deps.bzl",
     "go_register_toolchains",
     "go_rules_dependencies",
 )
@@ -119,7 +119,7 @@ go_rules_dependencies()
 go_register_toolchains(version = "1.18.2")
 ```
 
-> Standard biolerplate for `@io_bazel_rules_go`.
+> Standard biolerplate for `@rules_go`.
 
 ---
 

@@ -19,6 +19,11 @@ load("//rules/private:execution.bzl", "env_execute", "executable_extension")
 load("@bazel_gazelle//internal:go_repository_cache.bzl", "read_cache_env")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_netrc", "use_netrc")
 
+load(
+    "@bazel_gazelle_is_bazel_module//:defs.bzl",
+    "GAZELLE_IS_BAZEL_MODULE",
+)
+
 # We can't disable timeouts on Bazel, but we can set them to large values.
 _GO_REPOSITORY_TIMEOUT = 86400
 
@@ -353,7 +358,7 @@ proto_repository_attrs = {
         ],
     ),
     "build_extra_args": attr.string_list(),
-    "build_config": attr.label(default = "@bazel_gazelle_go_repository_config//:WORKSPACE"),
+    # "build_config": attr.label(default = "@bazel_gazelle_go_repository_config//:WORKSPACE" if GAZELLE_IS_BAZEL_MODULE else None),
     "build_directives": attr.string_list(default = []),
 
     # Patches to apply after running gazelle.

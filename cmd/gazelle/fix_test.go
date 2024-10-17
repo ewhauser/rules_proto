@@ -176,7 +176,7 @@ func TestNoChanges(t *testing.T) {
 	}
 
 	buildFile := filepath.Join(dir, "BUILD")
-	if err = os.WriteFile(buildFile, []byte(`load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+	if err = os.WriteFile(buildFile, []byte(`load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_library(
     name = "go_default_library",
@@ -261,7 +261,7 @@ func main() {}
 				{
 					Path: "src/BUILD.bazel",
 					Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_binary(
     name = "hello",
@@ -294,7 +294,7 @@ go_library(
 				{
 					Path: "out/BUILD",
 					Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 # src build file
 
@@ -328,7 +328,7 @@ go_binary(
 				{
 					Path: "out/BUILD",
 					Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_binary(
     name = "hello",
@@ -371,7 +371,7 @@ func TestFix_LangFilter(t *testing.T) {
 		{
 			Path: "BUILD.bazel",
 			Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 go_binary(
     name = "nofix",
@@ -418,7 +418,7 @@ func TestFix_MapKind_Argument(t *testing.T) {
 				{
 					Path: "BUILD.bazel",
 					Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 # gazelle:map_kind go_binary go_binary //my:custom.bzl
 
@@ -445,7 +445,7 @@ go_library(
 				{
 					Path: "BUILD.bazel",
 					Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library")
 load("//my:custom.bzl", "go_binary")
 
 # gazelle:map_kind go_binary go_binary //my:custom.bzl
@@ -471,7 +471,7 @@ go_library(
 				{
 					Path: "BUILD.bazel",
 					Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
 
 # gazelle:map_kind go_binary custom_go_binary //my:custom.bzl
 
@@ -498,7 +498,7 @@ go_library(
 				{
 					Path: "BUILD.bazel",
 					Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library")
 load("//my:custom.bzl", "custom_go_binary")
 
 # gazelle:map_kind go_binary custom_go_binary //my:custom.bzl
@@ -524,7 +524,7 @@ go_library(
 				{
 					Path: "BUILD.bazel",
 					Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library")
 
 custom_go_library = go_library
 
@@ -555,7 +555,7 @@ go_library(
 				{
 					Path: "BUILD.bazel",
 					Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library")
 
 custom_go_library = go_library
 
@@ -584,7 +584,7 @@ go_library(
 				{
 					Path: "BUILD.bazel",
 					Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library")
 load("@other_rules//:def.bzl", "something_custom")
 
 # gazelle:map_kind something_custom something_custom //my:custom.bzl
@@ -614,7 +614,7 @@ go_library(
 				{
 					Path: "BUILD.bazel",
 					Content: `
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library")
 load("@other_rules//:def.bzl", "something_custom")
 
 # gazelle:map_kind something_custom something_custom //my:custom.bzl

@@ -1,5 +1,5 @@
-load("@build_stack_rules_proto//rules:proto_dependency.bzl", "proto_dependency")
 load("@build_stack_rules_proto//rules:depsgen.bzl", "depsgen")
+load("@build_stack_rules_proto//rules:proto_dependency.bzl", "proto_dependency")
 
 depsgen(
     name = "core",
@@ -100,7 +100,7 @@ depsgen(
 # URL: https://github.com/bazelbuild/rules_go/releases/tag/v0.45.1
 # Size: 1681865 (1.7 MB)
 proto_dependency(
-    name = "io_bazel_rules_go",
+    name = "rules_go",
     repository_rule = "http_archive",
     sha256 = "aac6e182a9fffa2944fdf8abdca513823e21030bbb854ce74d8abfbccd636459",
     strip_prefix = "rules_go-0.45.1",
@@ -123,7 +123,7 @@ proto_dependency(
     urls = ["https://github.com/bazelbuild/bazel-gazelle/archive/v0.35.0.tar.gz"],
     deps = [
         ":bazel_skylib",
-        ":io_bazel_rules_go",
+        ":rules_go",
     ],
 )
 

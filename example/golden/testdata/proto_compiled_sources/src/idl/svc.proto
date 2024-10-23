@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-message Request {
-    string id = 1;
-}
-
-message Response {
-    string id = 1;
-}

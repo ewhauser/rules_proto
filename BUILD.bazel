@@ -72,7 +72,6 @@ filegroup(
         "//plugin:all_files",
         "//rules:all_files",
         "//third_party:all_files",
-        "//toolchain:all_files",
     ] + glob(["vendor/**/*"]),
     visibility = ["//visibility:public"],
 )

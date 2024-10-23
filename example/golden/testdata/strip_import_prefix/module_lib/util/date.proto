@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-package util;
-
-message Date {
-    string year = 1;
-    string month = 2;
-    string day = 3;
-}

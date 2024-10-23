@@ -1,7 +1,0 @@
-syntax = "proto3";
-
-package api.v1;
-
-message Data {
-    string id = 1;
-}

@@ -3,14 +3,13 @@ module(
     compatibility_level = 1,
 )
 
-register_toolchains("@build_stack_rules_proto//toolchain:standard")
-
 # core_deps.bzl
 bazel_dep(name = "bazel_features", version = "1.9.1")
 bazel_dep(name = "bazel_skylib", version = "1.5.0")
 bazel_dep(name = "rules_go", version = "0.50.1")
 bazel_dep(name = "gazelle", version = "0.39.1", repo_name = "bazel_gazelle")
-bazel_dep(name = "rules_proto", version = "6.0.0")
+bazel_dep(name = "rules_proto", version = "6.0.2")
+bazel_dep(name = "toolchains_protoc", version = "0.3.3")
 bazel_dep(name = "rules_cc", version = "0.0.9")
 
 non_module_deps = use_extension("@bazel_gazelle//internal/bzlmod:non_module_deps.bzl", "non_module_deps")
@@ -38,11 +37,6 @@ proto_repository_tools(
 bazel_dep(name = "rules_pkg", version = "0.7.0")
 bazel_dep(name = "rules_python", version = "0.27.1")
 bazel_dep(name = "zlib", version = "1.2.11")
-bazel_dep(name = "protobuf", version = "27.2", repo_name = "com_google_protobuf")
-single_version_override(
-    module_name = "protobuf",
-    version = "24.4",
-)
 
 bazel_dep(name = "protobuf_javascript", repo_name = "com_google_protobuf_javascript")
 git_override(
@@ -53,10 +47,6 @@ git_override(
 
 # grpc_core_deps()
 
-#bazel_dep(name = "rules_pkg", version = "0.7.1")
-#bazel_dep(name = "rules_python", version = "0.27.1")
-#bazel_dep(name = "zlib", version = "1.2.11")
-#bazel_dep(name = "protobuf", version = "21.7", repo_name = "com_google_protobuf")
 bazel_dep(name = "grpc", version = "1.56.3", repo_name = "com_github_grpc_grpc")
 
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk", dev_dependency = True)
@@ -145,50 +135,13 @@ use_repo(npm, "npm_ts_proto")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-http_archive(
-    name = "prebuilt_protoc_linux",
-    build_file_content = """
-filegroup(
-    name = "protoc",
-    srcs = ["bin/protoc"],
-    visibility = ["//visibility:public"],
+protoc = use_extension("@toolchains_protoc//protoc:extensions.bzl", "protoc")
+protoc.toolchain(
+    google_protobuf = "com_google_protobuf",
+    # Demonstrate overriding the default version
+    version = "v28.2",
 )
-""",
-    sha256 = "3a0e900f9556fbcac4c3a913a00d07680f0fdf6b990a341462d822247b265562",
-    urls = [
-        "https://github.com/google/protobuf/releases/download/v3.20.1/protoc-3.20.1-linux-x86_64.zip",
-    ],
-)
-
-http_archive(
-    name = "prebuilt_protoc_osx",
-    build_file_content = """
-filegroup(
-    name = "protoc",
-    srcs = ["bin/protoc"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "b4f36b18202d54d343a66eebc9f8ae60809a2a96cc2d1b378137550bbe4cf33c",
-    urls = [
-        "https://github.com/google/protobuf/releases/download/v3.20.1/protoc-3.20.1-osx-x86_64.zip",
-    ],
-)
-
-http_archive(
-    name = "prebuilt_protoc_windows",
-    build_file_content = """
-filegroup(
-    name = "protoc",
-    srcs = ["bin/protoc.exe"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "2291c634777242f3bf4891b082cebc6dd495ae621fbf751b27e800b83369a345",
-    urls = [
-        "https://github.com/google/protobuf/releases/download/v3.20.1/protoc-3.20.1-win32.zip",
-    ],
-)
+use_repo(protoc, "com_google_protobuf", "toolchains_protoc_hub")
 
 http_archive(
     name = "com_github_grpc_grpc_node_packages_grpc_tools_src",

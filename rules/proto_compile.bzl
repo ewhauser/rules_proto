@@ -55,8 +55,8 @@ def _plugin_label_key(label):
 def get_protoc_executable(ctx):
     if ctx.file.protoc:
         return ctx.file.protoc
-    protoc_toolchain_info = ctx.toolchains[str(Label("//toolchain:protoc"))]
-    return protoc_toolchain_info.protoc_executable
+    protoc_toolchain_info = ctx.toolchains[str(Label("@rules_proto//proto:toolchain_type"))]
+    return protoc_toolchain_info.proto.proto_compiler.executable
 
 def _descriptor_proto_path(proto, proto_info):
     """Convert a proto File to the path within the descriptor file.
@@ -393,5 +393,5 @@ proto_compile = rule(
             doc = "The verbosity flag.",
         ),
     },
-    toolchains = ["@build_stack_rules_proto//toolchain:protoc"],
+    toolchains = ["@rules_proto//proto:toolchain_type"],
 )

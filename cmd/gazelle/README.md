@@ -16,7 +16,6 @@ To upgrade gazelle, one must:
   `@bazel_gazelle//internal:gazelle.bash.in`, changes there must remain
   compatible with proto_gazelle.  Look at the diff there and make sure the proto_gazelle_impl is satifying the needs of that template.
 - Remember that this `cmd/gazelle` must be buildable via the standard go
-  toolchain (see proto_repository_tools.bzl):
 
 ```py
     args = [

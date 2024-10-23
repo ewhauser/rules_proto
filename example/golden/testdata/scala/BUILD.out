@@ -1,4 +1,0 @@
-exports_files(["config.yaml"])
-
-# gazelle:proto_language scala enabled true
-# gazelle:proto_rule proto_scala_library attr exports @com_google_protobuf//:protobuf_java

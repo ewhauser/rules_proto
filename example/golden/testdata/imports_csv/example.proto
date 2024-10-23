@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-import "google/protobuf/any.proto";
-
-option go_package = "github.com/example/test";
-
-message Message{
-  google.protobuf.Any body = 1;
-}

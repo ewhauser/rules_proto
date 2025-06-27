@@ -15,7 +15,7 @@ def _depsgen_impl(ctx):
 
     ctx.actions.write(
         output = config_json,
-        content = config.to_json(),
+        content = json.encode(config),
     )
 
     ctx.actions.run(
